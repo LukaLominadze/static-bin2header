@@ -5,23 +5,7 @@
  * terms of the MIT/X11 license. See: LICENSE.txt
  */
 
-#include "convert.h"
-#include "cxxopts.hpp"
-#include "paths.h"
-
-#include <cerrno>
-#include <cctype> // toupper
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <filesystem>
-#ifdef _WIN32
-#include <io.h>
-#define access _access
-#define F_OK 0
-#else
-#include <unistd.h>
-#endif
+#include "include/bin2header.h"
 
 using namespace std;
 
@@ -81,7 +65,6 @@ void printUsage() {
 void exitWithError(const int code, const string msg, const bool show_usage) {
 	cerr << "\nERROR: " << msg << endl;
 	if (show_usage) printUsage();
-	exit(code);
 }
 
 /** Prints message to stderr & exits program.
@@ -103,7 +86,7 @@ void exitWithError(const int code, const string msg) {
  *  @tparam char** argv
  *      Command line arguments.
  */
-int Convert(const filesystem::path& fin, const filesystem::path& fout, vector<const char*> _args=vector<const char*>()) {
+int Convert(const filesystem::path& fin, const filesystem::path& fout, vector<const char*> _args) {
 	string program = "bin2header";
 
 	vector<string> owned_args;
@@ -135,7 +118,7 @@ int Convert(const filesystem::path& fin, const filesystem::path& fout, vector<co
 	try {
 		args = options.parse(_args.size(), _args.data());
 	} catch (const cxxopts::OptionParseException& e) {
-		exitWithError(1, e.what(), true);
+		return -1;
 	}
 
 
@@ -192,7 +175,7 @@ int Convert(const filesystem::path& fin, const filesystem::path& fout, vector<co
 
 	if (_args.size() < 2) {
 		// FIXME: correct error return code
-		exitWithError(1, "Missing <file> argument", true);
+		return -1;
 	}
 
 	// only remaining argument should be input file
@@ -203,8 +186,8 @@ int Convert(const filesystem::path& fin, const filesystem::path& fout, vector<co
 		// clear stringstream
 		ss.str("");
 		ss << "File \"" << source_file << "\" does not exist";
-
-		exitWithError(ENOENT, ss.str(), true);
+		std::cout << ss.str() << std::endl;
+		return -1;
 	}
 
 	string hname = "";
@@ -217,5 +200,58 @@ int Convert(const filesystem::path& fin, const filesystem::path& fout, vector<co
 		target_file = args["output"].as<string>();
 	}
 
-	exit(convert(fin.string(), fout.string(), hname, false));
+	convert(fin.string(), fout.string(), hname, false);
+}
+
+const char* base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::string base64Encode(const std::vector<uint8_t>& bytes) {
+	std::string encoded;
+	int val = 0, valb = -6;
+
+	for (uint8_t c : bytes) {
+		val = (val << 8) + c;
+		valb += 8;
+		while (valb >= 0) {
+			encoded.push_back(base64_chars[(val >> valb) & 0x3F]);
+			valb -= 6;
+		}
+	}
+
+	if (valb > -6)
+		encoded.push_back(base64_chars[((val << 8) >> (valb + 8)) & 0x3F]);
+
+	while (encoded.size() % 4)
+		encoded.push_back('=');
+
+	return encoded;
+}
+
+std::vector<uint8_t> parseCppArray(const std::string& cpp) {
+	std::regex hexRegex(R"(0x[0-9a-fA-F]+)");
+	std::sregex_iterator iter(cpp.begin(), cpp.end(), hexRegex);
+	std::sregex_iterator end;
+
+	std::vector<uint8_t> result;
+	while (iter != end) {
+		std::string match = iter->str();
+		result.push_back(static_cast<uint8_t>(std::stoi(match, nullptr, 16)));
+		++iter;
+	}
+	return result;
+}
+
+std::string cppToYamlBinary(const std::string& cpp_code, const std::string& var_name) {
+	std::vector<uint8_t> data = parseCppArray(cpp_code);
+
+	std::ostringstream out;
+	out << var_name << ":\n";
+	for (size_t i = 0; i < data.size(); ++i) {
+		if (i % 16 == 0) out << "  - "; // start new line
+		else out << ", ";
+		out << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)data[i];
+		if (i % 16 == 15 && i + 1 < data.size()) out << "\n";
+	}
+	out << "\n";
+	return out.str();
 }
