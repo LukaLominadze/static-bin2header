@@ -16,6 +16,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <vector>
 
 using namespace std;
 
@@ -125,13 +126,13 @@ int convert(const string fin, string fout, string hname, const bool stdvector) {
 
 	/* *** START: uppercase header name *** */
 
-	char hname_upper[hname.length() + 2];
-	for (int current = 0; current < len(hname_upper); current++) {
+	vector<char> hname_upper(hname.length() + 2);
+	for (int current = 0; current < hname_upper.size() - 1; current++) {
 		hname_upper[current] = hname[current];
 		hname_upper[current] = toupper(hname_upper[current]);
 	}
 
-	string name_upper_h = hname_upper;
+	string name_upper_h(hname_upper.data(), hname_upper.size());
 	name_upper_h.append("_H");
 
 	/* *** END: uppercase header name *** */
@@ -212,9 +213,9 @@ int convert(const string fin, string fout, string hname, const bool stdvector) {
 
 			cout << "\rWriting chunk " << to_string(chunk_idx + 1) << " out of " << to_string(chunk_count) << " (Ctrl+C to cancel)" << std::flush;
 
-			char chunk[chunk_size];
+			vector<char> chunk(chunk_size);
 			ifs.seekg(chunk_idx * chunk_size + offset);
-			ifs.read(chunk, chunk_size);
+			ifs.read(chunk.data(), chunk_size);
 
 			unsigned int byte_idx;
 			for (byte_idx = 0; byte_idx < chunk_size; byte_idx++) {

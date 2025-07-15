@@ -10,3 +10,13 @@ man/*.gz
 
 # Distribution files
 bin2header-*.tar.xz
+
+.vs/
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters
+*.sln
+*.log
+
+bin/
+bin-int/

@@ -14,7 +14,14 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <unistd.h> // access,F_OK
+#include <filesystem>
+#ifdef _WIN32
+#include <io.h>
+#define access _access
+#define F_OK 0
+#else
+#include <unistd.h>
+#endif
 
 using namespace std;
 
@@ -96,15 +103,19 @@ void exitWithError(const int code, const string msg) {
  *  @tparam char** argv
  *      Command line arguments.
  */
-int main(int argc, char** argv) {
-	// get executable name
-	executable = getBaseName(normalizePath(argv[0]));
+int Convert(const filesystem::path& fin, const filesystem::path& fout, vector<const char*> _args=vector<const char*>()) {
+	string program = "bin2header";
 
-	// remove extension from executable name
-	const unsigned int ext_idx = executable.find_last_of(".");
-	executable = executable.substr(0, ext_idx);
+	vector<string> owned_args;
+	owned_args.push_back(program);                // program name
+	owned_args.push_back("--output=" + fout.string()); // output file, as an example
+	owned_args.push_back(fin.string());         // source file
 
-	cxxopts::Options options(executable, "Convert binary files to C/C++ headers");
+	_args.insert(_args.begin(), owned_args[0].c_str());
+	_args.push_back(owned_args[1].c_str());
+	_args.push_back(owned_args[2].c_str());
+
+	cxxopts::Options options(program, "Convert binary files to C/C++ headers");
 	options.add_options()
 			("h,help", "")
 			("v,version", "")
@@ -122,7 +133,7 @@ int main(int argc, char** argv) {
 
 	cxxopts::ParseResult args;
 	try {
-		args = options.parse(argc, argv);
+		args = options.parse(_args.size(), _args.data());
 	} catch (const cxxopts::OptionParseException& e) {
 		exitWithError(1, e.what(), true);
 	}
@@ -179,13 +190,13 @@ int main(int argc, char** argv) {
 	}
 	#endif
 
-	if (argc < 2) {
+	if (_args.size() < 2) {
 		// FIXME: correct error return code
 		exitWithError(1, "Missing <file> argument", true);
 	}
 
 	// only remaining argument should be input file
-	string source_file = normalizePath(argv[argc-1]);
+	string source_file = normalizePath(_args[_args.size() -1]);
 
 	// check if source file exists
 	if (access(source_file.c_str(), F_OK) == -1) {
@@ -206,5 +217,5 @@ int main(int argc, char** argv) {
 		target_file = args["output"].as<string>();
 	}
 
-	exit(convert(source_file, target_file, hname, args["stdvector"].as<bool>()));
+	exit(convert(fin.string(), fout.string(), hname, false));
 }
